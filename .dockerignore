@@ -1,0 +1,21 @@
+# Repo-root .dockerignore (build context = repo root for backend/Dockerfile)
+**/node_modules
+**/npm-debug.log*
+**/.env
+**/.env.*
+!**/.env.example
+**/*.log
+.git
+.gitignore
+.github
+.vscode
+.idea
+.DS_Store
+Thumbs.db
+**/coverage
+**/dist
+**/build
+INTERVIEW.md
+Deploy project plan.md
+README.md
+deploy/

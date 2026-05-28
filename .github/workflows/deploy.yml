@@ -1,0 +1,136 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+env:
+  IMAGE_NAME: ghcr.io/${{ github.repository }}/backend
+
+jobs:
+  build-and-push:
+    name: Build + push image to GHCR
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image_tag: ${{ steps.meta.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha,format=long
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: backend/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    name: Deploy via SSM
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Send deploy command via SSM
+        env:
+          IMAGE: ${{ env.IMAGE_NAME }}:sha-${{ github.sha }}
+          INSTANCE_ID: ${{ secrets.EC2_INSTANCE_ID }}
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GHCR_READ_TOKEN }}
+        run: |
+          set -euo pipefail
+          CMD=$(cat <<EOF
+          set -e
+          echo "\$GHCR_TOKEN" | docker login ghcr.io -u "\$GHCR_USER" --password-stdin
+          docker pull ${IMAGE}
+
+          # API container (host network so Caddy on host can reach :4000)
+          docker rm -f panel-api 2>/dev/null || true
+          docker run -d --name panel-api \\
+            --restart=always \\
+            --network host \\
+            --env-file /opt/panel/backend/.env \\
+            ${IMAGE} node src/server.js
+
+          # Worker container (SSH key mounted in so node-ssh can reach target EC2)
+          docker rm -f panel-worker 2>/dev/null || true
+          docker run -d --name panel-worker \\
+            --restart=always \\
+            --network host \\
+            --env-file /opt/panel/backend/.env \\
+            -v /home/ubuntu/devops-instances.pem:/keys/ec2.pem:ro \\
+            -e EC2_SSH_PRIVATE_KEY_PATH=/keys/ec2.pem \\
+            ${IMAGE} node src/workers/deploymentWorker.js
+
+          # Refresh the static assets Caddy serves from disk
+          mkdir -p /opt/panel/frontend-dist
+          docker cp panel-api:/app/frontend-dist/. /opt/panel/frontend-dist/
+
+          # Disable legacy systemd units if they exist
+          sudo systemctl disable --now panel-api panel-worker 2>/dev/null || true
+
+          # Smoke test
+          sleep 3
+          curl -fsS http://127.0.0.1:4000/health
+          docker image prune -f
+          EOF
+          )
+
+          aws ssm send-command \
+            --instance-ids "$INSTANCE_ID" \
+            --document-name "AWS-RunShellScript" \
+            --comment "GH Actions deploy ${GITHUB_SHA::7}" \
+            --parameters "commands=[\"$(printf '%s' "$CMD" | sed 's/"/\\"/g' | tr '\n' '\1' | sed 's/\x01/\\n/g')\"]" \
+            --query "Command.CommandId" --output text > /tmp/cmd_id
+
+          CMD_ID=$(cat /tmp/cmd_id)
+          echo "SSM command id: $CMD_ID"
+
+          # Poll for completion (max ~5 min)
+          for i in $(seq 1 60); do
+            STATUS=$(aws ssm list-command-invocations --command-id "$CMD_ID" --details \
+              --query "CommandInvocations[0].Status" --output text)
+            echo "[$i] status: $STATUS"
+            case "$STATUS" in
+              Success) break ;;
+              Failed|Cancelled|TimedOut)
+                aws ssm list-command-invocations --command-id "$CMD_ID" --details \
+                  --query "CommandInvocations[0].CommandPlugins[0].Output" --output text
+                exit 1 ;;
+            esac
+            sleep 5
+          done
+
+          aws ssm list-command-invocations --command-id "$CMD_ID" --details \
+            --query "CommandInvocations[0].CommandPlugins[0].Output" --output text

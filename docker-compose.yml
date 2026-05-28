@@ -1,0 +1,53 @@
+# Local development stack.
+#   docker compose up           -> mongo + redis + api + worker
+#   docker compose up mongo redis  -> just infra, run node locally
+#
+# Note: the worker will start but cannot deploy real tenants without
+# valid AWS_* + EC2_* + LAMBDA_* values in backend/.env. It just sits idle
+# waiting for jobs, which is fine for UI / API development.
+
+services:
+  mongo:
+    image: mongo:7
+    container_name: hcp-mongo
+    ports: ["27017:27017"]
+    volumes: [hcp-mongo-data:/data/db]
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: hcp-redis
+    ports: ["6379:6379"]
+    restart: unless-stopped
+
+  api:
+    image: hcp-backend:dev
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: hcp-api
+    command: ["node", "src/server.js"]
+    env_file: backend/.env
+    environment:
+      MONGO_URI: mongodb://mongo:27017/hcp
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      FRONTEND_ORIGIN: http://localhost:5173
+    ports: ["4000:4000"]
+    depends_on: [mongo, redis]
+    restart: unless-stopped
+
+  worker:
+    image: hcp-backend:dev
+    container_name: hcp-worker
+    command: ["node", "src/workers/deploymentWorker.js"]
+    env_file: backend/.env
+    environment:
+      MONGO_URI: mongodb://mongo:27017/hcp
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+    depends_on: [mongo, redis, api]
+    restart: unless-stopped
+
+volumes:
+  hcp-mongo-data:
