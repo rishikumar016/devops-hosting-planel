@@ -1,0 +1,17 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ssm:SendCommand",
+        "ssm:ListCommandInvocations",
+        "ssm:GetCommandInvocation"
+      ],
+      "Resource": [
+        "arn:aws:ec2:ap-south-1:767903311473:instance/i-0e3409c129ed75513",
+        "arn:aws:ssm:ap-south-1::document/AWS-RunShellScript"
+      ]
+    }
+  ]
+}
