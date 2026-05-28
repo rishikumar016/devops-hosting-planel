@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Get-ChildItem \"C:\\\\Users\\\\Rishi\\\\Desktop\\\\devops-dev\\\\frontend\\\\devops\" -Force -ErrorAction SilentlyContinue | Select-Object Name, Mode | Format-Table; \"---\"; Get-ChildItem \"C:\\\\Users\\\\Rishi\\\\Desktop\\\\devops-dev\\\\frontend\\\\devops\\\\node_modules\" -ErrorAction SilentlyContinue | Measure-Object | Select-Object Count)",
+      "PowerShell(Get-ChildItem \"C:\\\\Users\\\\Rishi\\\\Desktop\\\\devops-dev\\\\frontend\\\\devops\" -Force; \"---contents above---\"; Test-Path \"C:\\\\Users\\\\Rishi\\\\Desktop\\\\devops-dev\\\\frontend\\\\devops\")",
+      "Bash(cmd //c \"rmdir \\\\\"C:\\\\Users\\\\Rishi\\\\Desktop\\\\devops-dev\\\\frontend\\\\devops\\\\\"\")",
+      "Bash(echo \"exit=$?\")",
+      "PowerShell(cmd /c rmdir 'C:\\\\Users\\\\Rishi\\\\Desktop\\\\devops-dev\\\\frontend\\\\devops' 2>&1; \"exit=$LASTEXITCODE\"; Get-ChildItem 'C:\\\\Users\\\\Rishi\\\\Desktop\\\\devops-dev\\\\frontend')",
+      "Bash(npm install *)",
+      "Bash(node -e ' *)",
+      "Bash(npm run *)",
+      "PowerShell(Test-NetConnection *)",
+      "Read(//c/Users/Rishi/.ssh/**)",
+      "Read(//home/rishi/**)",
+      "PowerShell(where.exe ssh; ssh -V 2>&1)",
+      "PowerShell(ssh -i 'C:\\\\Users\\\\Rishi\\\\Documents\\\\devops-instances.pem' -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -o BatchMode=yes ubuntu@ec2-13-234-59-113.ap-south-1.compute.amazonaws.com 'echo SSH_OK; whoami; docker ps --format \"table {{.Names}}\\\\t{{.Image}}\\\\t{{.Ports}}\" 2>&1 | head -20; echo \"---caddy admin check---\"; curl -s -o /dev/null -w \"caddy local admin HTTP %{http_code}\\\\n\" http://127.0.0.1:2019/config/' 2>&1)",
+      "PowerShell(ssh -i 'C:\\\\Users\\\\Rishi\\\\Documents\\\\devops-instances.pem' -o BatchMode=yes ubuntu@ec2-13-234-59-113.ap-south-1.compute.amazonaws.com 'which docker; ls /usr/bin/docker /usr/local/bin/docker /snap/bin/docker 2>/dev/null; systemctl is-active docker 2>&1; echo \"---SSM agent---\"; systemctl is-active amazon-ssm-agent 2>&1; echo \"---OS---\"; cat /etc/os-release | head -3' 2>&1)",
+      "PowerShell(ssh -i 'C:\\\\Users\\\\Rishi\\\\Documents\\\\devops-instances.pem' -o BatchMode=yes -o ExitOnForwardFailure=yes -fN -L 2019:127.0.0.1:2019 ubuntu@ec2-13-234-59-113.ap-south-1.compute.amazonaws.com 2>&1; \"ssh exit=$LASTEXITCODE\"; Start-Sleep -Seconds 1; \"---tunnel test---\"; \\(Invoke-WebRequest -UseBasicParsing -Uri 'http://127.0.0.1:2019/config/' -TimeoutSec 5\\).StatusCode)",
+      "PowerShell($key = 'C:\\\\Users\\\\Rishi\\\\Documents\\\\devops-instances.pem')",
+      "PowerShell($host_ = 'ubuntu@ec2-13-234-59-113.ap-south-1.compute.amazonaws.com')",
+      "Bash(curl -s -X POST http://localhost:4000/api/deploy -H \"Content-Type: application/json\" -d '{\"clientName\":\"acme-test\",\"domain\":\"acme-test.local\",\"image\":\"nginx:alpine\"}')",
+      "Bash(rm -f api.log worker.log)",
+      "Bash(npm start *)"
+    ]
+  }
+}
