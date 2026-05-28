@@ -2,16 +2,22 @@
   "Version": "2012-10-17",
   "Statement": [
     {
+      "Sid": "SendCommandScopedToOurInstance",
       "Effect": "Allow",
-      "Action": [
-        "ssm:SendCommand",
-        "ssm:ListCommandInvocations",
-        "ssm:GetCommandInvocation"
-      ],
+      "Action": "ssm:SendCommand",
       "Resource": [
         "arn:aws:ec2:ap-south-1:767903311473:instance/i-0e3409c129ed75513",
         "arn:aws:ssm:ap-south-1::document/AWS-RunShellScript"
       ]
+    },
+    {
+      "Sid": "ReadOwnCommandInvocations",
+      "Effect": "Allow",
+      "Action": [
+        "ssm:ListCommandInvocations",
+        "ssm:GetCommandInvocation"
+      ],
+      "Resource": "*"
     }
   ]
 }

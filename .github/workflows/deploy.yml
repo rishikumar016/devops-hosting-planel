@@ -65,20 +65,26 @@ jobs:
           role-session-name: gh-actions-hcp-deploy
           aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: Send deploy command via SSM
+      - name: Render deploy script
         env:
           IMAGE: ${{ env.IMAGE_NAME }}:sha-${{ github.sha }}
-          INSTANCE_ID: ${{ secrets.EC2_INSTANCE_ID }}
           GHCR_USER: ${{ github.actor }}
           GHCR_TOKEN: ${{ secrets.GHCR_READ_TOKEN }}
         run: |
+          mkdir -p /tmp/ssm
+          # Unquoted EOF so $IMAGE, $GHCR_USER, $GHCR_TOKEN expand NOW (here in CI),
+          # baking the real values into the script that EC2 will run.
+          cat > /tmp/ssm/deploy.sh <<EOF
+          #!/bin/bash
           set -euo pipefail
-          CMD=$(cat <<EOF
-          set -e
-          echo "\$GHCR_TOKEN" | docker login ghcr.io -u "\$GHCR_USER" --password-stdin
+
+          echo "==> docker login ghcr.io"
+          echo "${GHCR_TOKEN}" | docker login ghcr.io -u "${GHCR_USER}" --password-stdin
+
+          echo "==> docker pull ${IMAGE}"
           docker pull ${IMAGE}
 
-          # API container (host network so Caddy on host can reach :4000)
+          echo "==> (re)create panel-api"
           docker rm -f panel-api 2>/dev/null || true
           docker run -d --name panel-api \\
             --restart=always \\
@@ -86,7 +92,7 @@ jobs:
             --env-file /opt/panel/backend/.env \\
             ${IMAGE} node src/server.js
 
-          # Worker container (SSH key mounted in so node-ssh can reach target EC2)
+          echo "==> (re)create panel-worker"
           docker rm -f panel-worker 2>/dev/null || true
           docker run -d --name panel-worker \\
             --restart=always \\
@@ -96,28 +102,40 @@ jobs:
             -e EC2_SSH_PRIVATE_KEY_PATH=/keys/ec2.pem \\
             ${IMAGE} node src/workers/deploymentWorker.js
 
-          # Refresh the static assets Caddy serves from disk
+          echo "==> refresh frontend-dist on host"
           mkdir -p /opt/panel/frontend-dist
           docker cp panel-api:/app/frontend-dist/. /opt/panel/frontend-dist/
 
-          # Disable legacy systemd units if they exist
+          echo "==> disable legacy systemd units"
           sudo systemctl disable --now panel-api panel-worker 2>/dev/null || true
 
-          # Smoke test
+          echo "==> smoke test /health"
           sleep 3
           curl -fsS http://127.0.0.1:4000/health
-          docker image prune -f
-          EOF
-          )
+          echo ""
 
-          aws ssm send-command \
+          docker image prune -f
+          echo "==> deploy complete"
+          EOF
+
+      - name: Send deploy command via SSM
+        env:
+          INSTANCE_ID: ${{ secrets.EC2_INSTANCE_ID }}
+        run: |
+          set -euo pipefail
+          # Base64-encode the script so we never fight shell or JSON escaping again.
+          SCRIPT_B64=$(base64 -w0 /tmp/ssm/deploy.sh)
+
+          # Build the parameters file with jq (handles JSON escaping correctly).
+          jq -n --arg cmd "echo $SCRIPT_B64 | base64 -d > /tmp/hcp-deploy.sh && bash /tmp/hcp-deploy.sh" \
+            '{commands: [$cmd]}' > /tmp/ssm/params.json
+
+          CMD_ID=$(aws ssm send-command \
             --instance-ids "$INSTANCE_ID" \
             --document-name "AWS-RunShellScript" \
             --comment "GH Actions deploy ${GITHUB_SHA::7}" \
-            --parameters "commands=[\"$(printf '%s' "$CMD" | sed 's/"/\\"/g' | tr '\n' '\1' | sed 's/\x01/\\n/g')\"]" \
-            --query "Command.CommandId" --output text > /tmp/cmd_id
-
-          CMD_ID=$(cat /tmp/cmd_id)
+            --parameters file:///tmp/ssm/params.json \
+            --query "Command.CommandId" --output text)
           echo "SSM command id: $CMD_ID"
 
           # Poll for completion (max ~5 min)
@@ -126,14 +144,21 @@ jobs:
               --query "CommandInvocations[0].Status" --output text)
             echo "[$i] status: $STATUS"
             case "$STATUS" in
-              Success) break ;;
-              Failed|Cancelled|TimedOut)
+              Success)
                 aws ssm list-command-invocations --command-id "$CMD_ID" --details \
                   --query "CommandInvocations[0].CommandPlugins[0].Output" --output text
+                exit 0 ;;
+              Failed|Cancelled|TimedOut)
+                echo "----- STDOUT -----"
+                aws ssm list-command-invocations --command-id "$CMD_ID" --details \
+                  --query "CommandInvocations[0].CommandPlugins[0].Output" --output text || true
+                echo "----- STDERR -----"
+                aws ssm list-command-invocations --command-id "$CMD_ID" --details \
+                  --query "CommandInvocations[0].StandardErrorContent" --output text || true
                 exit 1 ;;
             esac
             sleep 5
           done
 
-          aws ssm list-command-invocations --command-id "$CMD_ID" --details \
-            --query "CommandInvocations[0].CommandPlugins[0].Output" --output text
+          echo "Timed out waiting for SSM command"
+          exit 1
