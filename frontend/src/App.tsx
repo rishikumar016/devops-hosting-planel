@@ -1,21 +1,22 @@
-import React, { useEffect, useState } from 'react';
-import OnboardingForm from './components/OnboardingForm.jsx';
-import DeploymentList from './components/DeploymentList.jsx';
-import DeploymentDetail from './components/DeploymentDetail.jsx';
-import socket from './socket.js';
+import { useEffect, useState } from "react";
+import OnboardingForm from "./components/OnboardingForm";
+import DeploymentList from "./components/DeploymentList";
+import DeploymentDetail from "./components/DeploymentDetail";
+import socket from "./socket";
+import type { Deployment } from "./types";
 
-async function fetchDeployments() {
-  const res = await fetch('/api/deployments');
+async function fetchDeployments(): Promise<Deployment[]> {
+  const res = await fetch("/api/deployments");
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const json = await res.json();
   return json.deployments || [];
 }
 
 export default function App() {
-  const [deployments, setDeployments] = useState([]);
-  const [selectedId, setSelectedId] = useState(null);
+  const [deployments, setDeployments] = useState<Deployment[]>([]);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [wsConnected, setWsConnected] = useState(socket.connected);
-  const [err, setErr] = useState(null);
+  const [err, setErr] = useState<string | null>(null);
 
   async function refreshList() {
     try {
@@ -23,14 +24,22 @@ export default function App() {
       setDeployments(list);
       setErr(null);
     } catch (e) {
-      setErr(e.message);
+      setErr((e as Error).message);
     }
   }
 
   useEffect(() => {
     refreshList();
 
-    function onListUpdate({ id, status, updatedAt }) {
+    function onListUpdate({
+      id,
+      status,
+      updatedAt,
+    }: {
+      id: string;
+      status: string;
+      updatedAt: string;
+    }) {
       setDeployments((prev) => {
         const next = [...prev];
         const idx = next.findIndex((d) => d.id === id);
@@ -51,18 +60,18 @@ export default function App() {
       setWsConnected(false);
     }
 
-    socket.on('deployment:list-update', onListUpdate);
-    socket.on('connect', onConnect);
-    socket.on('disconnect', onDisconnect);
+    socket.on("deployment:list-update", onListUpdate);
+    socket.on("connect", onConnect);
+    socket.on("disconnect", onDisconnect);
 
     return () => {
-      socket.off('deployment:list-update', onListUpdate);
-      socket.off('connect', onConnect);
-      socket.off('disconnect', onDisconnect);
+      socket.off("deployment:list-update", onListUpdate);
+      socket.off("connect", onConnect);
+      socket.off("disconnect", onDisconnect);
     };
   }, []);
 
-  function handleCreated(deployment) {
+  function handleCreated(deployment: Deployment) {
     setDeployments((prev) => [
       {
         id: deployment.id,
@@ -86,8 +95,10 @@ export default function App() {
           <span className="brand-name">Hosting Control Panel</span>
         </div>
         <div className="topbar-meta">
-          <span className={`dot ${wsConnected ? '' : 'dot-off'}`} />
-          <span className="topbar-text">{wsConnected ? 'live' : 'reconnecting…'}</span>
+          <span className={`dot ${wsConnected ? "" : "dot-off"}`} />
+          <span className="topbar-text">
+            {wsConnected ? "live" : "reconnecting…"}
+          </span>
         </div>
       </header>
 
@@ -113,7 +124,9 @@ export default function App() {
       </div>
 
       <footer className="footer">
-        <span>API: /api/* &middot; WS: /socket.io &middot; Metrics: /metrics</span>
+        <span>
+          API: /api/* &middot; WS: /socket.io &middot; Metrics: /metrics
+        </span>
       </footer>
     </div>
   );
