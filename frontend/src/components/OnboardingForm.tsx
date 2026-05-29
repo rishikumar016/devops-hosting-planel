@@ -1,5 +1,20 @@
 import { useState, type FormEvent } from "react";
-import type { Deployment } from "../types";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Rocket } from "lucide-react";
+import type { Deployment } from "@/types";
+
+const DOMAIN_RE =
+  /^(?=.{1,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/i;
+const IMAGE_RE = /^[a-z0-9._\-/]+(:[a-zA-Z0-9._-]+)?$/;
 
 interface FormData {
   clientName: string;
@@ -7,41 +22,36 @@ interface FormData {
   image: string;
 }
 
-interface Props {
-  onCreated: (deployment: Deployment) => void;
-}
-
-const DOMAIN_RE =
-  /^(?=.{1,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/i;
-const IMAGE_RE = /^[a-z0-9._\-\/]+(:[a-zA-Z0-9._-]+)?$/;
-
-function validateLocal({
-  clientName,
-  domain,
-  image,
-}: FormData): Record<string, string> {
-  const errors: Record<string, string> = {};
-  if (!clientName || clientName.trim().length < 2)
+function validateLocal(form: FormData) {
+  const errors: Partial<Record<keyof FormData, string>> = {};
+  if (!form.clientName || form.clientName.trim().length < 2)
     errors.clientName = "At least 2 characters.";
-  if (!DOMAIN_RE.test(String(domain).trim().toLowerCase()))
+  if (!DOMAIN_RE.test(String(form.domain).trim().toLowerCase()))
     errors.domain = "Looks invalid (e.g. app.example.com).";
-  if (!IMAGE_RE.test(String(image).trim()))
+  if (!IMAGE_RE.test(String(form.image).trim()))
     errors.image = "Use repo[:tag] (lowercase).";
   return errors;
 }
 
-export default function OnboardingForm({ onCreated }: Props) {
+interface OnboardingFormProps {
+  onCreated: (deployment: Deployment) => void;
+}
+
+export default function OnboardingForm({ onCreated }: OnboardingFormProps) {
   const [form, setForm] = useState<FormData>({
     clientName: "",
     domain: "",
     image: "",
   });
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [errors, setErrors] = useState<Partial<Record<keyof FormData, string>>>(
+    {},
+  );
   const [submitting, setSubmitting] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
 
   function update(field: keyof FormData, value: string) {
     setForm((f) => ({ ...f, [field]: value }));
+    if (errors[field]) setErrors((e) => ({ ...e, [field]: undefined }));
   }
 
   async function onSubmit(e: FormEvent) {
@@ -65,66 +75,81 @@ export default function OnboardingForm({ onCreated }: Props) {
         return;
       }
       setForm({ clientName: "", domain: "", image: "" });
-      if (onCreated) onCreated(json.deployment);
+      onCreated(json.deployment);
     } catch (err) {
-      setServerError((err as Error).message);
+      setServerError(err instanceof Error ? err.message : String(err));
     } finally {
       setSubmitting(false);
     }
   }
 
   return (
-    <form className="card" onSubmit={onSubmit}>
-      <h2 className="card-title">Onboard client</h2>
-      <p className="card-sub">
-        Spins up the image on the host, registers the Caddy route, and runs the
-        post-deploy Lambda.
-      </p>
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Rocket className="size-5" />
+          Onboard Client
+        </CardTitle>
+        <CardDescription>
+          Spins up the image on the host, registers the Caddy route, and runs
+          the post-deploy Lambda.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={onSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="clientName">Client name</Label>
+            <Input
+              id="clientName"
+              autoComplete="off"
+              placeholder="acme-corp"
+              value={form.clientName}
+              onChange={(e) => update("clientName", e.target.value)}
+            />
+            {errors.clientName && (
+              <p className="text-sm text-destructive">{errors.clientName}</p>
+            )}
+          </div>
 
-      <label className="lbl" htmlFor="clientName">
-        Client name
-      </label>
-      <input
-        id="clientName"
-        className="input"
-        autoComplete="off"
-        placeholder="acme-corp"
-        value={form.clientName}
-        onChange={(e) => update("clientName", e.target.value)}
-      />
-      {errors.clientName && <div className="err">{errors.clientName}</div>}
+          <div className="space-y-2">
+            <Label htmlFor="domain">Domain</Label>
+            <Input
+              id="domain"
+              autoComplete="off"
+              placeholder="app.acme.example.com"
+              value={form.domain}
+              onChange={(e) => update("domain", e.target.value)}
+            />
+            {errors.domain && (
+              <p className="text-sm text-destructive">{errors.domain}</p>
+            )}
+          </div>
 
-      <label className="lbl" htmlFor="domain">
-        Domain
-      </label>
-      <input
-        id="domain"
-        className="input"
-        autoComplete="off"
-        placeholder="app.acme.example.com"
-        value={form.domain}
-        onChange={(e) => update("domain", e.target.value)}
-      />
-      {errors.domain && <div className="err">{errors.domain}</div>}
+          <div className="space-y-2">
+            <Label htmlFor="image">Docker image</Label>
+            <Input
+              id="image"
+              autoComplete="off"
+              placeholder="nginx:1.27-alpine"
+              value={form.image}
+              onChange={(e) => update("image", e.target.value)}
+            />
+            {errors.image && (
+              <p className="text-sm text-destructive">{errors.image}</p>
+            )}
+          </div>
 
-      <label className="lbl" htmlFor="image">
-        Docker image
-      </label>
-      <input
-        id="image"
-        className="input"
-        autoComplete="off"
-        placeholder="nginx:1.27-alpine"
-        value={form.image}
-        onChange={(e) => update("image", e.target.value)}
-      />
-      {errors.image && <div className="err">{errors.image}</div>}
+          <Button type="submit" disabled={submitting} className="w-full">
+            {submitting ? "Submitting…" : "Deploy"}
+          </Button>
 
-      <button className="btn btn-primary" disabled={submitting} type="submit">
-        {submitting ? "Submitting…" : "Deploy"}
-      </button>
-
-      {serverError && <div className="err err-banner">{serverError}</div>}
-    </form>
+          {serverError && (
+            <p className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+              {serverError}
+            </p>
+          )}
+        </form>
+      </CardContent>
+    </Card>
   );
 }

@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import socket from "../socket";
-import type { DeploymentDetailData } from "../types";
+import socket from "@/socket";
+import type { DeploymentDetail } from "@/types";
 
 export default function useDeploymentStatus(deploymentId: string | null) {
-  const [data, setData] = useState<DeploymentDetailData | null>(null);
+  const [data, setData] = useState<DeploymentDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [connected, setConnected] = useState(socket.connected);
 
@@ -15,17 +15,18 @@ export default function useDeploymentStatus(deploymentId: string | null) {
       try {
         const res = await fetch(`/api/status/${deploymentId}`);
         if (!res.ok) throw new Error(`status ${res.status}`);
-        const json: DeploymentDetailData = await res.json();
+        const json = await res.json();
         if (!cancelled) setData(json);
       } catch (err) {
-        if (!cancelled) setError((err as Error).message);
+        if (!cancelled)
+          setError(err instanceof Error ? err.message : String(err));
       }
     }
 
     fetchOnce();
     socket.emit("subscribe", deploymentId);
 
-    function onUpdate(payload: DeploymentDetailData) {
+    function onUpdate(payload: DeploymentDetail) {
       if (payload && payload.id === deploymentId) setData(payload);
     }
     function onConnect() {

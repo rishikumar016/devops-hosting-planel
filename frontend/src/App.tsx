@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
-import OnboardingForm from "./components/OnboardingForm";
-import DeploymentList from "./components/DeploymentList";
-import DeploymentDetail from "./components/DeploymentDetail";
-import socket from "./socket";
-import type { Deployment } from "./types";
+import OnboardingForm from "@/components/OnboardingForm";
+import DeploymentList from "@/components/DeploymentList";
+import DeploymentDetail from "@/components/DeploymentDetail";
+import socket from "@/socket";
+import type { Deployment } from "@/types";
+import { Activity, Wifi, WifiOff } from "lucide-react";
 
 async function fetchDeployments(): Promise<Deployment[]> {
   const res = await fetch("/api/deployments");
@@ -24,7 +25,7 @@ export default function App() {
       setDeployments(list);
       setErr(null);
     } catch (e) {
-      setErr((e as Error).message);
+      setErr(e instanceof Error ? e.message : String(e));
     }
   }
 
@@ -72,61 +73,56 @@ export default function App() {
   }, []);
 
   function handleCreated(deployment: Deployment) {
-    setDeployments((prev) => [
-      {
-        id: deployment.id,
-        clientName: deployment.clientName,
-        domain: deployment.domain,
-        image: deployment.image,
-        status: deployment.status,
-        createdAt: deployment.createdAt,
-        updatedAt: deployment.createdAt,
-      },
-      ...prev,
-    ]);
+    setDeployments((prev) => [deployment, ...prev]);
     setSelectedId(deployment.id);
   }
 
   return (
-    <div className="app">
-      <header className="topbar">
-        <div className="brand">
-          <span className="brand-mark">▮</span>
-          <span className="brand-name">Hosting Control Panel</span>
-        </div>
-        <div className="topbar-meta">
-          <span className={`dot ${wsConnected ? "" : "dot-off"}`} />
-          <span className="topbar-text">
-            {wsConnected ? "live" : "reconnecting…"}
-          </span>
+    <div className="flex min-h-screen flex-col bg-background text-foreground">
+      {/* Header */}
+      <header className="sticky top-0 z-50 border-b bg-background/80 backdrop-blur-sm">
+        <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4">
+          <div className="flex items-center gap-2 font-semibold tracking-tight">
+            <Activity className="size-5 text-primary" />
+            Hosting Control Panel
+          </div>
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            {wsConnected ? (
+              <Wifi className="size-4 text-emerald-500" />
+            ) : (
+              <WifiOff className="size-4 text-destructive animate-pulse" />
+            )}
+            <span>{wsConnected ? "Live" : "Reconnecting…"}</span>
+          </div>
         </div>
       </header>
 
-      {err && <div className="err err-banner">{err}</div>}
+      {/* Error banner */}
+      {err && (
+        <div className="border-b bg-destructive/10 px-4 py-2 text-center text-sm text-destructive">
+          {err}
+        </div>
+      )}
 
-      <div className="grid">
-        <section>
+      {/* Main */}
+      <main className="mx-auto grid w-full max-w-7xl flex-1 gap-6 p-4 md:grid-cols-[380px_1fr]">
+        {/* Left column */}
+        <div className="flex flex-col gap-6">
           <OnboardingForm onCreated={handleCreated} />
-          <div className="card list-card">
-            <h2 className="card-title">Recent deployments</h2>
-            <DeploymentList
-              deployments={deployments}
-              selectedId={selectedId}
-              onSelect={setSelectedId}
-            />
-          </div>
-        </section>
+          <DeploymentList
+            deployments={deployments}
+            selectedId={selectedId}
+            onSelect={setSelectedId}
+          />
+        </div>
 
-        <section className="card detail-card">
-          <h2 className="card-title">Live status</h2>
-          <DeploymentDetail deploymentId={selectedId} />
-        </section>
-      </div>
+        {/* Right column */}
+        <DeploymentDetail deploymentId={selectedId} />
+      </main>
 
-      <footer className="footer">
-        <span>
-          API: /api/* &middot; WS: /socket.io &middot; Metrics: /metrics
-        </span>
+      {/* Footer */}
+      <footer className="border-t py-3 text-center text-xs text-muted-foreground">
+        API: /api/* &middot; WS: /socket.io &middot; Metrics: /metrics
       </footer>
     </div>
   );

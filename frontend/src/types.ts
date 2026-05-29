@@ -8,18 +8,18 @@ export interface Deployment {
   updatedAt: string;
 }
 
-export interface LogEntry {
+export interface LogLine {
   ts: string;
   message: string;
   level?: string;
 }
 
-export interface DeploymentDetailData extends Deployment {
+export interface DeploymentDetail extends Deployment {
   containerName?: string;
   containerId?: string;
-  hostPort?: number;
+  hostPort?: string;
   lambdaRequestId?: string;
   teardownLambdaRequestId?: string;
   errorMessage?: string;
-  logs?: LogEntry[];
+  logs?: LogLine[];
 }

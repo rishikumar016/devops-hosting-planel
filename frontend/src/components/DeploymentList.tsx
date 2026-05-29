@@ -1,13 +1,11 @@
-import StatusBadge from "./StatusBadge";
-import type { Deployment } from "../types";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Inbox } from "lucide-react";
+import StatusBadge from "@/components/StatusBadge";
+import { cn } from "@/lib/utils";
+import type { Deployment } from "@/types";
 
-interface Props {
-  deployments: Deployment[];
-  selectedId: string | null;
-  onSelect: (id: string) => void;
-}
-
-function fmtTime(s: string | undefined): string {
+function fmtTime(s: string | undefined) {
   if (!s) return "";
   try {
     return new Date(s).toLocaleString();
@@ -16,41 +14,61 @@ function fmtTime(s: string | undefined): string {
   }
 }
 
+interface DeploymentListProps {
+  deployments: Deployment[];
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+}
+
 export default function DeploymentList({
   deployments,
   selectedId,
   onSelect,
-}: Props) {
-  if (!deployments || deployments.length === 0) {
-    return (
-      <div className="empty">
-        <div className="empty-title">No deployments yet</div>
-        <div className="empty-sub">
-          Submit the form to onboard your first client.
-        </div>
-      </div>
-    );
-  }
+}: DeploymentListProps) {
   return (
-    <ul className="dlist">
-      {deployments.map((d) => (
-        <li
-          key={d.id}
-          className={`dlist-row ${selectedId === d.id ? "is-selected" : ""}`}
-          onClick={() => onSelect(d.id)}
-        >
-          <div className="dlist-main">
-            <div className="dlist-client">{d.clientName}</div>
-            <div className="dlist-domain">{d.domain}</div>
+    <Card>
+      <CardHeader>
+        <CardTitle>Recent Deployments</CardTitle>
+      </CardHeader>
+      <CardContent className="p-0">
+        {deployments.length === 0 ? (
+          <div className="flex flex-col items-center gap-2 py-12 text-muted-foreground">
+            <Inbox className="size-10 stroke-1" />
+            <p className="text-sm font-medium">No deployments yet</p>
+            <p className="text-xs">
+              Submit the form to onboard your first client.
+            </p>
           </div>
-          <div className="dlist-meta">
-            <StatusBadge status={d.status} />
-            <div className="dlist-time">
-              {fmtTime(d.updatedAt || d.createdAt)}
-            </div>
-          </div>
-        </li>
-      ))}
-    </ul>
+        ) : (
+          <ScrollArea className="h-100">
+            <ul className="divide-y">
+              {deployments.map((d) => (
+                <li
+                  key={d.id}
+                  onClick={() => onSelect(d.id)}
+                  className={cn(
+                    "flex cursor-pointer items-center justify-between gap-4 px-6 py-3 transition-colors hover:bg-accent/50",
+                    selectedId === d.id && "bg-accent",
+                  )}
+                >
+                  <div className="min-w-0">
+                    <p className="truncate font-medium">{d.clientName}</p>
+                    <p className="truncate text-sm text-muted-foreground">
+                      {d.domain}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 flex-col items-end gap-1">
+                    <StatusBadge status={d.status} />
+                    <span className="text-xs text-muted-foreground">
+                      {fmtTime(d.updatedAt || d.createdAt)}
+                    </span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </ScrollArea>
+        )}
+      </CardContent>
+    </Card>
   );
 }
