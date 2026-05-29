@@ -5,11 +5,12 @@
 
 # ---------- 1. frontend builder ----------
 FROM node:20-alpine AS frontend-builder
+RUN corepack enable
 WORKDIR /build/frontend
-COPY frontend/package*.json ./
-RUN npm ci
+COPY frontend/package.json frontend/pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
 COPY frontend/ ./
-RUN npm run build
+RUN pnpm run build
 
 # ---------- 2. backend prod deps ----------
 FROM node:20-alpine AS backend-deps

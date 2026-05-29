@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Inbox } from "lucide-react";
+import { ExternalLink, Inbox } from "lucide-react";
 import StatusBadge from "@/components/StatusBadge";
 import { cn } from "@/lib/utils";
 import type { Deployment } from "@/types";
@@ -53,9 +53,16 @@ export default function DeploymentList({
                 >
                   <div className="min-w-0">
                     <p className="truncate font-medium">{d.clientName}</p>
-                    <p className="truncate text-sm text-muted-foreground">
+                    <a
+                      href={`http://${d.domain}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="inline-flex items-center gap-1 truncate text-sm text-blue-500 hover:text-blue-600 hover:underline"
+                    >
                       {d.domain}
-                    </p>
+                      <ExternalLink className="size-3 shrink-0" />
+                    </a>
                   </div>
                   <div className="flex shrink-0 flex-col items-end gap-1">
                     <StatusBadge status={d.status} />
